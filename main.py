@@ -1,5 +1,18 @@
+# This is a very basic autoscaler, designed to maintain a minimum level of an enviroment across
+# multiple machine types.
 #
+# Areas for improvement going forward would be
+#
+# 1) to include a removal method, as described below,
+# 2) the ability to specify ami according to instance type; the latter would be done via a file
+# with the following format:
+#
+# <instancetype> <instancenumber> <instancetype_ami>
+# Note: 2) completed by turning the input into a dict with a list value for each key.
+#
+
 # bring in boto3
+
 import boto3
 
 #define shortnames and bring in environment variables
@@ -9,26 +22,39 @@ ec2c = boto3.client('ec2')
 asg_dict = {}
 # Get amount of instances per type
 
+# This is set to open a specified file due to the limitations of my development environment
+# and time; I have added a commented-out line to show what would be the correct in-operation use.,
+# This presumes a different file for each ASG, as written in the BASH wrapper.
+
 with open("asg.config") as asgconfig:
+# with open(sys.argv[1]) as asgconfig:
     for line in asgconfig:
 
-        (key, val) = line.split()
-        asg_dict[str(key)] = val
+        (key, val1, val2) = line.split(":")
+        asg_dict[str(key)] = [val1, val2]
 
-for instancetype, instancenumber in asg_dict.items():
+print (asg_dict)
+
+for instancetype, instancedata in asg_dict.items():
     #This now becomes our main loop to check if we match what is required.
-
-    print(instancetype, instancenumber)
+#   print(type(instancetype))
+#   print(instancetype, instancenumber)
     scale_info = ec2c.describe_instances(
         Filters=[
             {'Name': 'instance-type', 'Values': [instancetype]},
         ]
     )
+# Note: This only works to maintain a level of instances -- it will not scale down at the moment.
+# num_needed could be used to reduce, with a loop pulling up the first instance-id and deleting it,
+# looping over num_needed times -- this presumes all instances are identical.
+    instancenumber = (instancedata[0])
+    instanceami = instancedata[1].strip()
     num_needed = int(instancenumber) - (len(scale_info) - 1)
     if num_needed > 0:
-        ec2r.create_instances(InstanceType=[instancetype],MinCount=num_needed,MaxCount=num_needed)
+        ec2r.create_instances(ImageId=instanceami,InstanceType=instancetype,MinCount=num_needed,MaxCount=num_needed)
 
-
+# print statements are commented out but left in to show debugging process.
+#
 
 #   print (num_needed)
 #    print(scale_info)
