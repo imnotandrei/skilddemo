@@ -8,6 +8,17 @@
 # with the following format:
 #
 # <instancetype> <instancenumber> <instancetype_ami>
+#
+# 3) Permit multiple amis per isntance type by adding a "group" classification to the input file
+# so that the file would read:
+# <group> <instancetype> <instancenumber> <instancetype_ami>
+#
+# However, I think at this point we're getting closer to reimplementing terraform, instead of
+# reimplementing an ASG.
+#
+# Usage: asg.py <autoscaling group file> -- this could be run in, say, cron at whatever interval
+# seems appropriate.
+#
 # Note: 2) completed by turning the input into a dict with a list value for each key.
 #
 
@@ -33,12 +44,19 @@ with open("asg.config") as asgconfig:
         (key, val1, val2) = line.split(":")
         asg_dict[str(key)] = [val1, val2]
 
-print (asg_dict)
+# print (asg_dict)
 
 for instancetype, instancedata in asg_dict.items():
     #This now becomes our main loop to check if we match what is required.
 #   print(type(instancetype))
 #   print(instancetype, instancenumber)
+#   moved the next two lines to the top of the loop for clarity's sake.
+
+    instancenumber = (instancedata[0])
+    instanceami = instancedata[1].strip()
+
+#
+
     scale_info = ec2c.describe_instances(
         Filters=[
             {'Name': 'instance-type', 'Values': [instancetype]},
@@ -47,8 +65,7 @@ for instancetype, instancedata in asg_dict.items():
 # Note: This only works to maintain a level of instances -- it will not scale down at the moment.
 # num_needed could be used to reduce, with a loop pulling up the first instance-id and deleting it,
 # looping over num_needed times -- this presumes all instances are identical.
-    instancenumber = (instancedata[0])
-    instanceami = instancedata[1].strip()
+
     num_needed = int(instancenumber) - (len(scale_info) - 1)
     if num_needed > 0:
         ec2r.create_instances(ImageId=instanceami,InstanceType=instancetype,MinCount=num_needed,MaxCount=num_needed)
